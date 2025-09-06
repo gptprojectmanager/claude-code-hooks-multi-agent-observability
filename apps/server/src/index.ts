@@ -10,9 +10,19 @@ import {
   importTheme,
   getThemeStats 
 } from './theme';
+import { cleanupEventsDB, getDatabaseStats } from './cleanup';
 
 // Initialize database
 initDatabase();
+
+// Run cleanup on startup
+cleanupEventsDB();
+
+// Schedule cleanup every 6 hours
+setInterval(() => {
+  console.log('[Server] Running scheduled database cleanup...');
+  cleanupEventsDB();
+}, 6 * 60 * 60 * 1000);
 
 // Store WebSocket clients
 const wsClients = new Set<any>();
@@ -88,6 +98,40 @@ const server = Bun.serve({
       const limit = parseInt(url.searchParams.get('limit') || '100');
       const events = getRecentEvents(limit);
       return new Response(JSON.stringify(events), {
+        headers: { ...headers, 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // GET /health - Health check endpoint with database stats
+    if (url.pathname === '/health' && req.method === 'GET') {
+      const dbStats = getDatabaseStats();
+      const healthData = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        version: '1.0.0',
+        services: {
+          database: 'ok',
+          websocket: 'ok',
+          cleanup: 'ok'
+        },
+        metrics: {
+          activeConnections: wsClients.size,
+          uptime: process.uptime(),
+          memoryUsage: process.memoryUsage()
+        },
+        database: {
+          size: dbStats.sizeFormatted,
+          totalEvents: dbStats.totalEvents,
+          eventsLast7Days: dbStats.eventsLast7Days,
+          oldEvents: dbStats.oldEvents,
+          largePayloads: dbStats.largePayloads,
+          lastCleanup: dbStats.lastCleanup,
+          cleanupNeeded: dbStats.oldEvents > 0 || dbStats.largePayloads > 0,
+          backupRecommended: dbStats.size > 50 * 1024 * 1024
+        }
+      };
+      
+      return new Response(JSON.stringify(healthData), {
         headers: { ...headers, 'Content-Type': 'application/json' }
       });
     }

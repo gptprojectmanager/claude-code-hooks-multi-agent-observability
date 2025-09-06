@@ -127,6 +127,8 @@ claude-code-hooks-multi-agent-observability/
 │   │   ├── src/
 │   │   │   ├── index.ts    # Main server with HTTP/WebSocket endpoints
 │   │   │   ├── db.ts       # SQLite database management & migrations
+│   │   │   ├── cleanup.ts  # Database cleanup & health monitoring
+│   │   │   ├── theme.ts    # Theme management functionality
 │   │   │   └── types.ts    # TypeScript interfaces
 │   │   ├── package.json
 │   │   └── events.db       # SQLite database (gitignored)
@@ -202,6 +204,7 @@ Bun-powered TypeScript server with real-time capabilities:
   - `POST /events` - Receive events from agents
   - `GET /events/recent` - Paginated event retrieval with filtering
   - `GET /events/filter-options` - Available filter values
+  - `GET /health` - System health and database statistics
   - `WS /stream` - Real-time event broadcasting
 - **Features**:
   - Automatic schema migrations
@@ -356,6 +359,64 @@ Copy `.env.sample` to `.env` in the project root and fill in your API keys:
 - **Client**: Vue 3, TypeScript, Vite, Tailwind CSS
 - **Hooks**: Python 3.8+, Astral uv, TTS (ElevenLabs or OpenAI), LLMs (Claude or OpenAI)
 - **Communication**: HTTP REST, WebSocket
+
+## 🧹 Database Cleanup & Health Monitoring
+
+### Automatic Database Maintenance
+
+The system now includes automatic database cleanup to prevent unlimited growth:
+
+- **Scheduled Cleanup**: Runs every 6 hours and on server startup
+- **Event Retention**: Automatically removes events older than 7 days
+- **Payload Optimization**: Truncates large payloads (>10KB) after 1 day to preserve essential metadata
+- **Space Reclamation**: Performs VACUUM, REINDEX, and ANALYZE operations
+- **Backup System**: Creates automatic backups when database exceeds 50MB
+- **Theme Cleanup**: Removes expired theme shares
+
+### Health Monitoring Endpoint
+
+Monitor system health and database status via `GET /health`:
+
+```bash
+curl http://localhost:4000/health | jq
+```
+
+Response includes:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-09-06T09:37:52.258Z",
+  "services": {
+    "database": "ok",
+    "websocket": "ok", 
+    "cleanup": "ok"
+  },
+  "metrics": {
+    "activeConnections": 0,
+    "uptime": 918.19,
+    "memoryUsage": { "rss": 34177024, "heapTotal": 1757184 }
+  },
+  "database": {
+    "size": "16.47 MB",
+    "totalEvents": 1508,
+    "eventsLast7Days": 1508,
+    "oldEvents": 0,
+    "largePayloads": 113,
+    "lastCleanup": "2025-09-06T09:37:52.257Z",
+    "cleanupNeeded": true,
+    "backupRecommended": false
+  }
+}
+```
+
+### Database Statistics
+
+Key metrics tracked:
+- **Database Size**: Current SQLite file size
+- **Event Counts**: Total events and recent activity (last 7 days)
+- **Cleanup Status**: Events eligible for deletion or optimization
+- **Recommendations**: Automatic suggestions for backup or cleanup actions
+- **System Health**: Memory usage, uptime, and active connections
 
 ## 🔧 Troubleshooting
 
